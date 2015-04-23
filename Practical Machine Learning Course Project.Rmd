@@ -1,0 +1,97 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Asfa L."
+
+---
+
+#Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the exercise.  This is the "classe" variable in the training set.
+
+The training data for this project are available at: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available at: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+#Reading and Preprocessing the Data
+
+Read the data into R (assumes file is in your working directory)
+```{r read data}
+traindata <- read.csv("pml-training.csv")
+testdata <- read.csv("pml-testing.csv")
+```
+
+Check the dimensions of the two sets of data
+```{r dim}
+dim(traindata)
+dim(testdata)
+```
+
+As we can see there are 160 variables in both sets. Lets try and eliminate the ones we do not need by removing zero covariates.
+```{r nzv} 
+ library(caret)
+ nsv <- nearZeroVar(traindata, saveMetrics = T)
+ newtraindata<-traindata[, !nsv$nzv]
+ newtestdata<-testdata[, !nsv$nzv]
+```
+
+Next lets remove columns with missing values
+```{r removeNA}
+ newtraindata <- newtraindata[, colSums(is.na(newtraindata)) == 0]
+ newtestdata <- newtestdata[, colSums(is.na(newtestdata)) == 0]
+```
+
+Lastly, lets remove the first 6 columns of the dataset as they are not related to the measurements we are concerned about.
+```{r removecolumns}
+ newtraindata <- newtraindata[,-(1:6)]
+ newtestdata <- newtestdata[,-(1:6)]
+```
+
+We now have 53 variables instead of 160 in the training and testing data sets.
+```{r dimnewdata}
+dim(newtraindata)
+dim(newtestdata)
+```
+
+#Cross Validation
+We will now take the data we have and split the training set into a subset of another training set(60%) and test set(40%). Then we will build a model on the training set using a Random Forest prediction algorithm and we will repeat the cross validation 10 times. We are using random forest as it is one of the two top performing algorithms in prediction.
+
+```{r rfcv}
+set.seed(3966)
+inTrain <- createDataPartition(newtraindata$classe, p=0.60, list=F)
+trainsub <- newtraindata[inTrain, ]
+testsub <- newtraindata[-inTrain, ]
+
+modFit <- train(classe ~ ., data=trainsub, method="rf", trControl=trainControl(method= "cv", repeats = 10))
+
+modFit
+modFit$finalModel
+```
+
+Now lets take our model and apply it to the testing subset we created using the predict function. We can can than use a confusion matrix to evaluate our predictions and take a look at accuracy measures.
+```{r predicttestsub}
+predicttestsub <-predict(modFit, testsub)
+confusionMatrix(testsub$classe, predicttestsub)
+```
+
+We can see that the accuracy of our model is 99%. The kappa statistisic is .99 which shows high reliability of the data.
+We can calculate the out of sample error by doing the following:
+```{r outofsampleerror}
+OutofSampleError <- 1 - (sum(predicttestsub == testsub$classe)/nrow(testsub))
+OutofSampleError
+```
+
+As we can see applying our model to the test set give us an out of sample error rate of .7% which is very low and we can conclude that our model is very accurate.
+
+#Predict testing data
+The last thing we have to do is apply our model to the original test data set.
+
+```{r predicttestdata}
+final<- predict(modFit, testdata)
+final
+```
